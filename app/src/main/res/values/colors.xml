@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primary">#1565C0</color>
+    <color name="primary_dark">#003c8f</color>
+    <color name="primary_light">#5e92f3</color>
+    <color name="background">#F5F5F5</color>
+    <color name="surface">#FFFFFF</color>
+    <color name="error">#B00020</color>
+    <color name="white">#FFFFFF</color>
+    <color name="textPrimary">#212121</color>
+    <color name="textSecondary">#757575</color>
+    <color name="discount_color">#2E7D32</color>
+
+    <!-- Colores de marca de supermercados -->
+    <color name="lider_color">#E31F2B</color>
+    <color name="jumbo_color">#00843D</color>
+    <color name="unimarc_color">#E5001E</color>
+</resources>

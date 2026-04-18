@@ -1,0 +1,14 @@
+<resources>
+    <string name="app_name">Comparador Supermercados</string>
+    <string name="app_title">Comparador de Precios</string>
+    <string name="search_hint">Buscar producto (ej: leche, arroz…)</string>
+    <string name="btn_search">Buscar en supermercados</string>
+    <string name="searching">Buscando precios…</string>
+    <string name="no_results">No se encontraron resultados</string>
+    <string name="supermarket_lider">Líder</string>
+    <string name="supermarket_jumbo">Jumbo</string>
+    <string name="supermarket_unimarc">Unimarc</string>
+    <string name="product_image_desc">Imagen del producto</string>
+    <string name="results_count">%d resultado(s)</string>
+    <string name="no_connection">Sin conexión a internet</string>
+</resources>

@@ -1,0 +1,3 @@
+-keep class com.google.gson.** { *; }
+-keep class okhttp3.** { *; }
+-keep class org.jsoup.** { *; }
