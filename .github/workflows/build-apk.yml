@@ -73,25 +73,21 @@ jobs:
 
       - name: Crear GitHub Release con APK
         uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: v1.0-debug
+          tag_name: v1.0
           name: "Comparador Supermercados v1.0"
           body: |
             ## Comparador de Precios - Supermercados Chilenos
 
-            App Android para comparar precios en **Líder**, **Jumbo** y **Unimarc** simultáneamente.
+            App Android para comparar precios en **Lider**, **Jumbo** y **Unimarc** simultaneamente.
 
             ### Como instalar
             1. Descarga `ComparadorSupermercados.apk`
-            2. En tu Android: **Configuracion > Seguridad > Instalar apps desconocidas**
+            2. En tu Android: Configuracion > Seguridad > Instalar apps desconocidas
             3. Abre el APK descargado e instala
 
-            ### Requisitos
-            - Android 8.0 (API 26) o superior
-            - Conexion a internet
-
-            > Build de debug — para uso personal.
+            Requiere Android 8.0 (API 26) o superior.
           files: app/build/outputs/apk/debug/ComparadorSupermercados.apk
-          draft: false
-          prerelease: false
-          make_latest: true
+          fail_on_unmatched_files: true
