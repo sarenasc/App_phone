@@ -21,7 +21,7 @@ class SearchViewModel : ViewModel() {
         viewModelScope.launch {
             _state.value = SearchState.Loading
             runCatching { repository.search(query) }
-                .onSuccess { _state.value = SearchState.Success(it) }
+                .onSuccess { _state.value = it }
                 .onFailure { _state.value = SearchState.Error(it.message ?: "Error desconocido") }
         }
     }

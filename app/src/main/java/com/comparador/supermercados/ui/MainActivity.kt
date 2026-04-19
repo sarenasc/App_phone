@@ -77,7 +77,7 @@ class MainActivity : AppCompatActivity() {
                     when (state) {
                         is SearchState.Idle -> showIdle()
                         is SearchState.Loading -> showLoading()
-                        is SearchState.Success -> showResults(state.results)
+                        is SearchState.Success -> showResults(state)
                         is SearchState.Error -> showError(state.message)
                     }
                 }
@@ -101,22 +101,29 @@ class MainActivity : AppCompatActivity() {
         binding.cardUnimarc.visibility = View.GONE
     }
 
-    private fun showResults(results: Map<Supermarket, List<Product>>) {
+    private fun showResults(state: SearchState.Success) {
         binding.loadingContainer.visibility = View.GONE
 
-        val lider = results[Supermarket.LIDER] ?: emptyList()
-        val jumbo = results[Supermarket.JUMBO] ?: emptyList()
-        val unimarc = results[Supermarket.UNIMARC] ?: emptyList()
+        val lider = state.results[Supermarket.LIDER] ?: emptyList()
+        val jumbo = state.results[Supermarket.JUMBO] ?: emptyList()
+        val unimarc = state.results[Supermarket.UNIMARC] ?: emptyList()
 
-        updateSection(binding.cardLider, binding.tvLiderCount, liderAdapter, lider)
-        updateSection(binding.cardJumbo, binding.tvJumboCount, jumboAdapter, jumbo)
-        updateSection(binding.cardUnimarc, binding.tvUnimarcCount, unimarcAdapter, unimarc)
+        updateSection(binding.cardLider, binding.tvLiderCount, liderAdapter, lider, state.errors[Supermarket.LIDER])
+        updateSection(binding.cardJumbo, binding.tvJumboCount, jumboAdapter, jumbo, state.errors[Supermarket.JUMBO])
+        updateSection(binding.cardUnimarc, binding.tvUnimarcCount, unimarcAdapter, unimarc, state.errors[Supermarket.UNIMARC])
 
-        if (lider.isEmpty() && jumbo.isEmpty() && unimarc.isEmpty()) {
-            binding.tvError.text = getString(R.string.no_results)
-            binding.tvError.visibility = View.VISIBLE
-        } else {
-            binding.tvError.visibility = View.GONE
+        val allEmpty = lider.isEmpty() && jumbo.isEmpty() && unimarc.isEmpty()
+        val allFailed = state.errors.size == 3
+        when {
+            allFailed -> {
+                binding.tvError.text = "Sin conexión con los supermercados. Verifica tu internet."
+                binding.tvError.visibility = View.VISIBLE
+            }
+            allEmpty -> {
+                binding.tvError.text = getString(R.string.no_results)
+                binding.tvError.visibility = View.VISIBLE
+            }
+            else -> binding.tvError.visibility = View.GONE
         }
     }
 
@@ -124,14 +131,21 @@ class MainActivity : AppCompatActivity() {
         card: com.google.android.material.card.MaterialCardView,
         countView: android.widget.TextView,
         adapter: ProductAdapter,
-        products: List<Product>
+        products: List<Product>,
+        error: String?
     ) {
-        if (products.isEmpty()) {
-            card.visibility = View.GONE
-        } else {
-            adapter.submitList(products)
-            countView.text = getString(R.string.results_count, products.size)
-            card.visibility = View.VISIBLE
+        when {
+            products.isNotEmpty() -> {
+                adapter.submitList(products)
+                countView.text = getString(R.string.results_count, products.size)
+                card.visibility = View.VISIBLE
+            }
+            error != null -> {
+                adapter.submitList(emptyList())
+                countView.text = "Sin conexión"
+                card.visibility = View.VISIBLE
+            }
+            else -> card.visibility = View.GONE
         }
     }
 

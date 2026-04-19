@@ -14,9 +14,32 @@ class JumboScraper(client: OkHttpClient) : BaseScraper(client) {
 
     override suspend fun search(query: String): List<Product> {
         val encoded = URLEncoder.encode(query, "UTF-8")
-        val url = "https://www.jumbo.cl/api/catalog_system/pub/products/search?ft=$encoded&_from=0&_to=9"
-        val json = fetchJson(url, mapOf("Referer" to "https://www.jumbo.cl/"))
-        return parseVtex(json, Supermarket.JUMBO)
+
+        // Intento 1: VTEX IO Intelligent Search (API moderna)
+        runCatching {
+            val url = "https://www.jumbo.cl/api/io/_v/api/intelligent-search/product_search" +
+                "?locale=es-CL&query=$encoded&count=10&page=1&map=ft&hideUnavailableItems=true"
+            val products = parseVtexIO(
+                fetchJson(url, mapOf("Referer" to "https://www.jumbo.cl/", "Origin" to "https://www.jumbo.cl")),
+                Supermarket.JUMBO
+            )
+            if (products.isNotEmpty()) return products
+        }
+
+        // Intento 2: VTEX catalog search (legacy)
+        runCatching {
+            val url = "https://www.jumbo.cl/api/catalog_system/pub/products/search?ft=$encoded&_from=0&_to=9"
+            val products = parseVtex(fetchJson(url, mapOf("Referer" to "https://www.jumbo.cl/")), Supermarket.JUMBO)
+            if (products.isNotEmpty()) return products
+        }
+
+        return emptyList()
+    }
+
+    internal fun parseVtexIO(json: String, supermarket: Supermarket): List<Product> {
+        val root = runCatching { gson.fromJson(json, JsonObject::class.java) }.getOrNull() ?: return emptyList()
+        val productsArray = root.getAsJsonArray("products") ?: return emptyList()
+        return parseVtex(productsArray.toString(), supermarket)
     }
 
     internal fun parseVtex(json: String, supermarket: Supermarket): List<Product> {
@@ -34,7 +57,7 @@ class JumboScraper(client: OkHttpClient) : BaseScraper(client) {
 
                 if (offer.get("IsAvailable")?.asBoolean == false) return@mapNotNull null
 
-                val price = offer.get("Price")?.asDouble ?: return@mapNotNull null
+                val price = offer.get("Price")?.asDouble?.takeIf { it > 0 } ?: return@mapNotNull null
                 val listPrice = offer.get("ListPrice")?.asDouble
                 val imageUrl = firstItem.getAsJsonArray("images")
                     ?.firstOrNull()?.asJsonObject?.get("imageUrl")?.asString
