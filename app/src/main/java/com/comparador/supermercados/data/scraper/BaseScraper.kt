@@ -48,7 +48,12 @@ abstract class BaseScraper(protected val client: OkHttpClient) {
             extraHeaders.forEach { (k, v) -> builder.addHeader(k, v) }
             client.newCall(builder.build()).execute().use { response ->
                 if (!response.isSuccessful) throw Exception("HTTP ${response.code} en $url")
-                response.body?.string() ?: ""
+                val body = response.body?.string() ?: ""
+                val trimmed = body.trimStart()
+                if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
+                    throw Exception("Respuesta bloqueada (${trimmed.take(60)})")
+                }
+                body
             }
         }
 

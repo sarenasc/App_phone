@@ -4,7 +4,6 @@ import com.comparador.supermercados.data.model.Product
 import com.comparador.supermercados.data.model.Supermarket
 import com.google.gson.Gson
 import com.google.gson.JsonArray
-import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import okhttp3.OkHttpClient
 import org.jsoup.Jsoup
@@ -16,7 +15,8 @@ class LiderScraper(client: OkHttpClient) : BaseScraper(client) {
     private val jumboParser = JumboScraper(client)
 
     override suspend fun search(query: String): List<Product> {
-        val encoded = URLEncoder.encode(query, "UTF-8")
+        val encoded = URLEncoder.encode(query, "UTF-8").replace("+", "%20")
+        var lastError: Throwable? = null
 
         // Intento 1: parsear __NEXT_DATA__ de la página de búsqueda
         runCatching {
@@ -30,15 +30,16 @@ class LiderScraper(client: OkHttpClient) : BaseScraper(client) {
                 val products = parseNextData(nextData)
                 if (products.isNotEmpty()) return products
             }
-        }
+        }.onFailure { lastError = it }
 
         // Intento 2: API VTEX (por si migraron de plataforma)
         runCatching {
             val url = "https://www.lider.cl/supermercado/api/catalog_system/pub/products/search?ft=$encoded&_from=0&_to=9"
             val products = jumboParser.parseVtex(fetchJson(url), Supermarket.LIDER)
             if (products.isNotEmpty()) return products
-        }
+        }.onFailure { lastError = it }
 
+        lastError?.let { throw Exception(it.message) }
         return emptyList()
     }
 
@@ -46,14 +47,12 @@ class LiderScraper(client: OkHttpClient) : BaseScraper(client) {
         val root = runCatching { gson.fromJson(json, JsonObject::class.java) }.getOrNull() ?: return emptyList()
         val pageProps = root.getAsJsonObject("props")?.getAsJsonObject("pageProps") ?: return emptyList()
 
-        // Intentar rutas conocidas del JSON de Walmart Chile antes de la búsqueda recursiva
         val knownProductArray = tryKnownPaths(pageProps)
         if (knownProductArray != null) {
             val products = parseProductArray(knownProductArray)
             if (products.isNotEmpty()) return products
         }
 
-        // Búsqueda recursiva como fallback
         val productArray = findProductArray(pageProps, depth = 0) ?: return emptyList()
         return parseProductArray(productArray)
     }
@@ -81,7 +80,6 @@ class LiderScraper(client: OkHttpClient) : BaseScraper(client) {
         return array.mapNotNull { element ->
             runCatching {
                 val obj = element.asJsonObject
-
                 val name = obj.get("displayName")?.asString
                     ?: obj.get("name")?.asString
                     ?: obj.get("productName")?.asString

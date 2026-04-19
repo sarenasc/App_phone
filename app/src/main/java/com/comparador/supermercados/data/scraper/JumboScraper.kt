@@ -13,9 +13,10 @@ class JumboScraper(client: OkHttpClient) : BaseScraper(client) {
     private val gson = Gson()
 
     override suspend fun search(query: String): List<Product> {
-        val encoded = URLEncoder.encode(query, "UTF-8")
+        val encoded = URLEncoder.encode(query, "UTF-8").replace("+", "%20")
+        var lastError: Throwable? = null
 
-        // Intento 1: VTEX IO Intelligent Search (API moderna)
+        // Intento 1: VTEX IO Intelligent Search
         runCatching {
             val url = "https://www.jumbo.cl/api/io/_v/api/intelligent-search/product_search" +
                 "?locale=es-CL&query=$encoded&count=10&page=1&map=ft&hideUnavailableItems=true"
@@ -24,15 +25,16 @@ class JumboScraper(client: OkHttpClient) : BaseScraper(client) {
                 Supermarket.JUMBO
             )
             if (products.isNotEmpty()) return products
-        }
+        }.onFailure { lastError = it }
 
-        // Intento 2: VTEX catalog search (legacy)
+        // Intento 2: VTEX catalog search
         runCatching {
-            val url = "https://www.jumbo.cl/api/catalog_system/pub/products/search?ft=$encoded&_from=0&_to=9"
+            val url = "https://www.jumbo.cl/api/catalog_system/pub/products/search?ft=$encoded&_from=0&_to=9&sc=1"
             val products = parseVtex(fetchJson(url, mapOf("Referer" to "https://www.jumbo.cl/")), Supermarket.JUMBO)
             if (products.isNotEmpty()) return products
-        }
+        }.onFailure { lastError = it }
 
+        lastError?.let { throw Exception(it.message) }
         return emptyList()
     }
 
