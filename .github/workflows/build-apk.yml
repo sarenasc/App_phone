@@ -23,6 +23,24 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
+      - name: Cachear debug keystore (firma consistente entre builds)
+        id: cache-keystore
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/debug.keystore
+          key: android-debug-keystore-v1
+
+      - name: Generar debug keystore si no existe en caché
+        if: steps.cache-keystore.outputs.cache-hit != 'true'
+        run: |
+          mkdir -p ~/.android
+          keytool -genkey -v \
+            -keystore ~/.android/debug.keystore \
+            -alias androiddebugkey \
+            -keyalg RSA -keysize 2048 -validity 36500 \
+            -storepass android -keypass android \
+            -dname "CN=Android Debug,O=Android,C=US"
+
       - name: Descargar gradle-wrapper.jar real
         run: |
           curl -L \
