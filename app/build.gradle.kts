@@ -8,7 +8,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.comparador.supermercados"
+        applicationId = "cl.comparador.supermercados"
         minSdk = 26
         targetSdk = 35
         versionCode = 1
