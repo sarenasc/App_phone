@@ -21,7 +21,7 @@ class JumboScraper(client: OkHttpClient) : BaseScraper(client) {
 
     internal fun parseVtex(json: String, supermarket: Supermarket): List<Product> {
         val type = object : TypeToken<List<JsonObject>>() {}.type
-        val items: List<JsonObject> = runCatching { gson.fromJson(json, type) }.getOrNull() ?: return emptyList()
+        val items: List<JsonObject> = runCatching<List<JsonObject>> { gson.fromJson(json, type) }.getOrNull() ?: return emptyList()
 
         return items.mapNotNull { item ->
             runCatching {
