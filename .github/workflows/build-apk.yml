@@ -40,10 +40,11 @@ jobs:
             "platforms;android-35" \
             "build-tools;35.0.0"
 
+      - name: Crear local.properties con SDK path
+        run: echo "sdk.dir=$ANDROID_HOME" > local.properties
+
       - name: Build Debug APK
         run: ./gradlew assembleDebug --no-daemon --stacktrace
-        env:
-          ANDROID_HOME: ${{ env.ANDROID_HOME }}
 
       - name: Renombrar APK
         run: |
