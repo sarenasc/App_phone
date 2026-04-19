@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Símbolo de precio / tag -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,27 C39.1,27 27,39.1 27,54 C27,68.9 39.1,81 54,81 C68.9,81 81,68.9 81,54 C81,39.1 68.9,27 54,27 Z M58,66 L44,66 L44,60 L54,60 L54,55 L47,55 C44.8,55 43,53.2 43,51 L43,45 C43,42.8 44.8,41 47,41 L64,41 L64,47 L50,47 L50,49 L57,49 C59.2,49 61,50.8 61,53 L61,61 C61,63.8 59.8,66 58,66 Z" />
+</vector>
