@@ -1,68 +1,160 @@
 package com.comparador.supermercados.data.scraper
 
+import android.content.Context
+import android.os.Handler
+import android.os.Looper
+import android.webkit.JavascriptInterface
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import com.comparador.supermercados.data.model.Product
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
-import okhttp3.OkHttpClient
-import okhttp3.Request
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
-abstract class BaseScraper(protected val client: OkHttpClient) {
+abstract class BaseScraper(protected val context: Context) {
 
-    protected suspend fun fetchHtml(url: String, extraHeaders: Map<String, String> = emptyMap()): String =
-        withContext(Dispatchers.IO) {
-            val builder = Request.Builder()
-                .url(url)
-                .addHeader("User-Agent", CHROME_UA)
-                .addHeader("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8")
-                .addHeader("Accept-Language", "es-CL,es;q=0.9,en;q=0.8")
-                .addHeader("Accept-Encoding", "gzip, deflate, br")
-                .addHeader("sec-ch-ua", SEC_CH_UA)
-                .addHeader("sec-ch-ua-mobile", "?1")
-                .addHeader("sec-ch-ua-platform", "\"Android\"")
-                .addHeader("sec-fetch-dest", "document")
-                .addHeader("sec-fetch-mode", "navigate")
-                .addHeader("sec-fetch-site", "none")
-                .addHeader("sec-fetch-user", "?1")
-                .addHeader("upgrade-insecure-requests", "1")
-            extraHeaders.forEach { (k, v) -> builder.addHeader(k, v) }
-            client.newCall(builder.build()).execute().use { response ->
-                if (!response.isSuccessful) throw Exception("HTTP ${response.code} en $url")
-                response.body?.string() ?: ""
+    // Carga la URL en WebView (resuelve Cloudflare) y luego llama al API path via fetch()
+    protected suspend fun fetchJsonViaWebView(pageUrl: String, apiPath: String): String =
+        withContext(Dispatchers.Main) {
+            suspendCancellableCoroutine { cont ->
+                val wv = WebView(context)
+                wv.settings.apply {
+                    javaScriptEnabled = true
+                    domStorageEnabled = true
+                    userAgentString = CHROME_UA
+                }
+
+                val handler = Handler(Looper.getMainLooper())
+                val timeout = Runnable {
+                    if (cont.isActive) cont.resumeWithException(Exception("Timeout: $pageUrl"))
+                    wv.destroy()
+                }
+                handler.postDelayed(timeout, 25_000)
+
+                class Bridge {
+                    @JavascriptInterface fun onResult(json: String) {
+                        handler.removeCallbacks(timeout)
+                        if (cont.isActive) cont.resume(json)
+                        handler.post { wv.destroy() }
+                    }
+                    @JavascriptInterface fun onError(msg: String) {
+                        handler.removeCallbacks(timeout)
+                        if (cont.isActive) cont.resumeWithException(Exception(msg))
+                        handler.post { wv.destroy() }
+                    }
+                }
+                wv.addJavascriptInterface(Bridge(), "WVBridge")
+
+                wv.webViewClient = object : WebViewClient() {
+                    private var done = false
+                    override fun onPageFinished(view: WebView, url: String?) {
+                        if (done) return
+                        // Esperar a que Cloudflare resuelva el challenge si está activo
+                        val js = """
+                            (function tryFetch(retries) {
+                                if (document.title === 'Just a moment...' && retries > 0) {
+                                    setTimeout(function(){ tryFetch(retries-1); }, 1500);
+                                    return;
+                                }
+                                done = true;
+                                fetch('$apiPath', {headers:{'Accept':'application/json'}})
+                                    .then(function(r){ return r.text(); })
+                                    .then(function(t){ WVBridge.onResult(t); })
+                                    .catch(function(e){ WVBridge.onError(String(e)); });
+                            })(8);
+                        """
+                        view.evaluateJavascript(js, null)
+                        done = true
+                    }
+                    override fun onReceivedError(view: WebView, code: Int, desc: String, url: String) {
+                        handler.removeCallbacks(timeout)
+                        if (cont.isActive) cont.resumeWithException(Exception("Error $code"))
+                        wv.destroy()
+                    }
+                }
+
+                wv.loadUrl(pageUrl)
+                cont.invokeOnCancellation {
+                    handler.removeCallbacks(timeout)
+                    handler.post { wv.destroy() }
+                }
             }
         }
 
-    protected suspend fun fetchJson(url: String, extraHeaders: Map<String, String> = emptyMap()): String =
-        withContext(Dispatchers.IO) {
-            val builder = Request.Builder()
-                .url(url)
-                .addHeader("User-Agent", CHROME_UA)
-                .addHeader("Accept", "application/json, text/plain, */*")
-                .addHeader("Accept-Language", "es-CL,es;q=0.9,en;q=0.8")
-                .addHeader("Accept-Encoding", "gzip, deflate, br")
-                .addHeader("sec-ch-ua", SEC_CH_UA)
-                .addHeader("sec-ch-ua-mobile", "?1")
-                .addHeader("sec-ch-ua-platform", "\"Android\"")
-                .addHeader("sec-fetch-dest", "empty")
-                .addHeader("sec-fetch-mode", "cors")
-                .addHeader("sec-fetch-site", "same-origin")
-            extraHeaders.forEach { (k, v) -> builder.addHeader(k, v) }
-            client.newCall(builder.build()).execute().use { response ->
-                if (!response.isSuccessful) throw Exception("HTTP ${response.code} en $url")
-                val body = response.body?.string() ?: ""
-                val trimmed = body.trimStart()
-                if (!trimmed.startsWith("{") && !trimmed.startsWith("[")) {
-                    throw Exception("Respuesta bloqueada (${trimmed.take(60)})")
+    // Carga la URL en WebView y extrae el contenido de script#__NEXT_DATA__
+    protected suspend fun fetchNextDataViaWebView(url: String): String =
+        withContext(Dispatchers.Main) {
+            suspendCancellableCoroutine { cont ->
+                val wv = WebView(context)
+                wv.settings.apply {
+                    javaScriptEnabled = true
+                    domStorageEnabled = true
+                    userAgentString = CHROME_UA
                 }
-                body
+
+                val handler = Handler(Looper.getMainLooper())
+                val timeout = Runnable {
+                    if (cont.isActive) cont.resumeWithException(Exception("Timeout: $url"))
+                    wv.destroy()
+                }
+                handler.postDelayed(timeout, 25_000)
+
+                class Bridge {
+                    @JavascriptInterface fun onResult(json: String) {
+                        handler.removeCallbacks(timeout)
+                        if (cont.isActive) cont.resume(json)
+                        handler.post { wv.destroy() }
+                    }
+                    @JavascriptInterface fun onError(msg: String) {
+                        handler.removeCallbacks(timeout)
+                        if (cont.isActive) cont.resumeWithException(Exception(msg))
+                        handler.post { wv.destroy() }
+                    }
+                }
+                wv.addJavascriptInterface(Bridge(), "WVBridge")
+
+                wv.webViewClient = object : WebViewClient() {
+                    private var done = false
+                    override fun onPageFinished(view: WebView, url: String?) {
+                        if (done) return
+                        val js = """
+                            (function tryExtract(retries) {
+                                if (document.title === 'Just a moment...' && retries > 0) {
+                                    setTimeout(function(){ tryExtract(retries-1); }, 1500);
+                                    return;
+                                }
+                                var el = document.getElementById('__NEXT_DATA__');
+                                if (el && el.textContent) {
+                                    WVBridge.onResult(el.textContent);
+                                } else {
+                                    WVBridge.onError('__NEXT_DATA__ no encontrado en ' + document.title);
+                                }
+                            })(8);
+                        """
+                        view.evaluateJavascript(js, null)
+                        done = true
+                    }
+                    override fun onReceivedError(view: WebView, code: Int, desc: String, url: String) {
+                        handler.removeCallbacks(timeout)
+                        if (cont.isActive) cont.resumeWithException(Exception("Error web: $desc"))
+                        wv.destroy()
+                    }
+                }
+
+                wv.loadUrl(url)
+                cont.invokeOnCancellation {
+                    handler.removeCallbacks(timeout)
+                    handler.post { wv.destroy() }
+                }
             }
         }
 
     abstract suspend fun search(query: String): List<Product>
 
     companion object {
-        private const val CHROME_UA =
+        const val CHROME_UA =
             "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.6367.82 Mobile Safari/537.36"
-        private const val SEC_CH_UA =
-            "\"Chromium\";v=\"124\", \"Google Chrome\";v=\"124\", \"Not-A.Brand\";v=\"99\""
     }
 }

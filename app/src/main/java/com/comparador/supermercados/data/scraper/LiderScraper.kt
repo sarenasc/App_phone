@@ -1,42 +1,30 @@
 package com.comparador.supermercados.data.scraper
 
+import android.content.Context
 import com.comparador.supermercados.data.model.Product
 import com.comparador.supermercados.data.model.Supermarket
 import com.google.gson.Gson
 import com.google.gson.JsonArray
 import com.google.gson.JsonObject
-import okhttp3.OkHttpClient
-import org.jsoup.Jsoup
 import java.net.URLEncoder
 
-class LiderScraper(client: OkHttpClient) : BaseScraper(client) {
+class LiderScraper(context: Context) : BaseScraper(context) {
 
     private val gson = Gson()
-    private val jumboParser = JumboScraper(client)
+    private val jumboParser = JumboScraper(context)
 
     override suspend fun search(query: String): List<Product> {
         val encoded = URLEncoder.encode(query, "UTF-8").replace("+", "%20")
         var lastError: Throwable? = null
 
-        // Intento 1: parsear __NEXT_DATA__ de la página de búsqueda
         runCatching {
-            val html = fetchHtml(
-                "https://www.lider.cl/supermercado/search?Ntt=$encoded",
-                mapOf("Referer" to "https://www.lider.cl/")
+            val nextData = fetchNextDataViaWebView(
+                "https://www.lider.cl/supermercado/search?Ntt=$encoded"
             )
-            val doc = Jsoup.parse(html)
-            val nextData = doc.select("script#__NEXT_DATA__").firstOrNull()?.data()
-            if (!nextData.isNullOrBlank()) {
+            if (nextData.isNotBlank()) {
                 val products = parseNextData(nextData)
                 if (products.isNotEmpty()) return products
             }
-        }.onFailure { lastError = it }
-
-        // Intento 2: API VTEX (por si migraron de plataforma)
-        runCatching {
-            val url = "https://www.lider.cl/supermercado/api/catalog_system/pub/products/search?ft=$encoded&_from=0&_to=9"
-            val products = jumboParser.parseVtex(fetchJson(url), Supermarket.LIDER)
-            if (products.isNotEmpty()) return products
         }.onFailure { lastError = it }
 
         lastError?.let { throw Exception(it.message) }
@@ -102,7 +90,6 @@ class LiderScraper(client: OkHttpClient) : BaseScraper(client) {
                 val imageUrl = obj.get("image")?.asString
                     ?: obj.get("imageUrl")?.asString
                     ?: obj.getAsJsonObject("images")?.get("defaultImage")?.asString
-                    ?: obj.getAsJsonArray("images")?.firstOrNull()?.asJsonObject?.get("url")?.asString
 
                 Product(
                     name = name,

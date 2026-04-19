@@ -1,6 +1,7 @@
 package com.comparador.supermercados.ui
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.comparador.supermercados.data.model.SearchState
 import com.comparador.supermercados.data.repository.SupermarketRepository
@@ -9,9 +10,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-class SearchViewModel : ViewModel() {
+class SearchViewModel(app: Application) : AndroidViewModel(app) {
 
-    private val repository = SupermarketRepository()
+    private val repository = SupermarketRepository(app)
 
     private val _state = MutableStateFlow<SearchState>(SearchState.Idle)
     val state: StateFlow<SearchState> = _state.asStateFlow()
