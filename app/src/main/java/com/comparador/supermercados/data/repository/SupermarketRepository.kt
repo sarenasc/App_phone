@@ -9,19 +9,25 @@ import com.comparador.supermercados.data.scraper.LiderScraper
 import com.comparador.supermercados.data.scraper.UnimarcScraper
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
-import okhttp3.JavaNetCookieJar
+import okhttp3.Cookie
+import okhttp3.CookieJar
+import okhttp3.HttpUrl
 import okhttp3.OkHttpClient
-import java.net.CookieManager
-import java.net.CookiePolicy
 import java.util.concurrent.TimeUnit
 
 class SupermarketRepository {
+
+    private val cookieJar = object : CookieJar {
+        private val store = mutableMapOf<String, List<Cookie>>()
+        override fun saveFromResponse(url: HttpUrl, cookies: List<Cookie>) { store[url.host] = cookies }
+        override fun loadForRequest(url: HttpUrl): List<Cookie> = store[url.host] ?: emptyList()
+    }
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
         .followRedirects(true)
-        .cookieJar(JavaNetCookieJar(CookieManager(null, CookiePolicy.ACCEPT_ALL)))
+        .cookieJar(cookieJar)
         .build()
 
     private val lider = LiderScraper(client)
