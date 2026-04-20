@@ -14,18 +14,18 @@ class UnimarcScraper(context: Context) : BaseScraper(context) {
         var lastError: Throwable? = null
 
         runCatching {
-            val apiPath = "/api/catalog_system/pub/products/search?ft=$encoded&_from=0&_to=9&sc=1"
-            val products = jumboParser.parseVtex(
-                fetchJsonViaWebView("https://www.unimarc.cl/", apiPath),
-                Supermarket.UNIMARC
+            val json = fetchPageStateViaWebView(
+                "https://www.unimarc.cl/busqueda?q=$encoded",
+                encoded,
+                "unimarc.cl"
             )
+            val products = jumboParser.parseStoreState(json, Supermarket.UNIMARC)
             if (products.isNotEmpty()) return products
         }.onFailure { lastError = it }
 
         runCatching {
-            val apiPath = "/api/io/_v/api/intelligent-search/product_search" +
-                "?locale=es-CL&query=$encoded&count=10&page=1&map=ft&hideUnavailableItems=true"
-            val products = jumboParser.parseVtexIO(
+            val apiPath = "/api/catalog_system/pub/products/search?ft=$encoded&_from=0&_to=9"
+            val products = jumboParser.parseVtex(
                 fetchJsonViaWebView("https://www.unimarc.cl/", apiPath),
                 Supermarket.UNIMARC
             )
